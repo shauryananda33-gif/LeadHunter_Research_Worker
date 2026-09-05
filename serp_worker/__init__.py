@@ -1,3 +1,1 @@
-"""
-LeadHunter SERP worker package.
-"""
+"""LeadHunter search worker package."""
