@@ -1,49 +1,55 @@
 # LeadHunter Research Worker
 
-A standalone research worker for the LeadHunter platform.
+Standalone research worker for LeadHunter.
 
-The first version focuses on Google organic SERP collection using
-Playwright.
+## Version 0.1
 
-## Current scope
+This first version focuses on Google organic SERP collection using Playwright.
 
-This version provides:
+### Endpoints
 
-- FastAPI service
-- Google organic search
-- Playwright Chromium
-- Structured SERP results
-- Query support
-- Location support
-- Country/language support
-- Result ranking
-- Result title
-- Result URL
-- Result domain
-- Result snippet
-- Health endpoint
-- Docker deployment
-- Render deployment configuration
+- `GET /` service information
+- `GET /health` health check
+- `POST /serp` Google organic search
+- `GET /docs` Swagger API documentation
 
-## Architecture
+### SERP request
 
-```text
-LeadHunter
-    |
-    | HTTP
-    v
-Research Worker
-    |
-    +-- Google SERP
-    |
-    +-- future: Google Maps / GBP
-    |
-    +-- future: Website crawler
-    |
-    +-- future: Reviews
-    |
-    +-- future: Competitors
-    |
-    +-- future: Citations
-    |
-    +-- future: Evidence analysis
+```json
+{
+  "query": "dentist",
+  "location": "Indore",
+  "country": "in",
+  "language": "en",
+  "max_results": 10
+}
+```
+
+### Local run
+
+```bash
+pip install -r requirements.txt
+playwright install chromium
+uvicorn main:app --host 0.0.0.0 --port 10000
+```
+
+Google markup can change and Google may rate-limit or challenge automated requests. This worker does not attempt to bypass CAPTCHA or security controls.
+
+### Roadmap
+
+1. Google organic SERP
+2. Google Maps / Business Profile
+3. Reviews
+4. Photos
+5. Website crawling
+6. SEO
+7. Conversion analysis
+8. Social profiles
+9. Directories/platforms
+10. Citation consistency
+11. Competitors
+12. Buying signals
+13. Evidence storage
+14. AI analysis
+15. Qualification
+16. Sales recommendation
