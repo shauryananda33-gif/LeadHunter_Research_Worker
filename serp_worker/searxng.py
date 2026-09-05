@@ -1,145 +1,60 @@
 from __future__ import annotations
-import logging, os, re
+
+import logging
+import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
-import httpx
-from bs4 import BeautifulSoup
 
-logger = logging.getLogger(__name__)
+import httpx
+
+logger = logging.getLogger("leadhunter-searxng-client")
+
 
 class SearchError(Exception):
-    pass
+    """Raised when the SearXNG backend cannot produce usable results."""
 
-@dataclass
+
+@dataclass(frozen=True)
 class SearchResult:
     rank: int
     title: str
     url: str
     domain: str
     snippet: str
-    def as_dict(self):
-        return {"rank": self.rank, "title": self.title, "url": self.url,
-                "domain": self.domain, "snippet": self.snippet}
+
+    def as_dict(self) -> dict[str, object]:
+        return {"rank": self.rank, "title": self.title, "url": self.url, "domain": self.domain, "snippet": self.snippet}
+
 
 class SearXNGClient:
-    DEFAULT_URL = "https://searx.tiekoetter.com"
+    def __init__(self) -> None:
+        self.base_url = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
+        self.timeout = float(os.getenv("SEARXNG_TIMEOUT", "25"))
+        self.auth_user = os.getenv("SEARXNG_AUTH_USER", "").strip()
+        self.auth_password = os.getenv("SEARXNG_AUTH_PASSWORD", "")
+        self.user_agent = "LeadHunterResearchWorker/0.4.0"
 
-    def __init__(self):
-        self.base_url = os.getenv("SEARXNG_URL", self.DEFAULT_URL).rstrip("/")
-        self.timeout = float(os.getenv("SEARXNG_TIMEOUT", "20"))
-        self.user_agent = "LeadHunterResearchWorker/0.2 (self-hosted search client)"
-
-    async def search(self, query, location=None, country="in",
-                     language="en", max_results=10):
-        search_query = " ".join(x.strip() for x in (query, location or "") if x and x.strip())
-        lang = self._language(language, country)
-        logger.info("SearXNG search: backend=%s query=%r", self.base_url, search_query)
-
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True,
-                                     headers={"User-Agent": self.user_agent}) as http:
-            params = {"q": search_query, "format": "json", "language": lang,
-                      "safesearch": "0", "pageno": "1"}
-            try:
-                response = await http.get(f"{self.base_url}/search", params=params,
-                                          headers={"Accept": "application/json"})
-            except httpx.HTTPError as exc:
-                raise SearchError(f"SearXNG connection failed: {exc}") from exc
-
-            logger.info("SearXNG JSON response status: %s", response.status_code)
-            if response.status_code == 200:
-                try:
-                    results = self._parse_json(response.json(), max_results)
-                    if results:
-                        return self._response(query, location, country, language,
-                                              results, "json")
-                except ValueError:
-                    logger.warning("SearXNG returned non-JSON content")
-
-            results = await self._html_fallback(http, search_query, lang, max_results)
-            if results:
-                return self._response(query, location, country, language,
-                                      results, "html")
-
-            raise SearchError(
-                f"SearXNG returned no usable search results (HTTP {response.status_code})."
-            )
-
-    async def _html_fallback(self, http, search_query, language, max_results):
-        try:
-            response = await http.get(
-                f"{self.base_url}/search",
-                params={"q": search_query, "language": language,
-                        "safesearch": "0", "pageno": "1"},
-                headers={"Accept": "text/html"})
-        except httpx.HTTPError as exc:
-            logger.warning("SearXNG HTML fallback failed: %s", exc)
-            return []
-        logger.info("SearXNG HTML fallback status: %s", response.status_code)
-        if response.status_code != 200:
-            return []
-        return self._parse_html(response.text, max_results)
-
-    def _parse_json(self, payload, max_results):
-        raw = payload.get("results") if isinstance(payload, dict) else None
-        if not isinstance(raw, list):
-            return []
-        out, seen = [], set()
-        for item in raw:
-            if not isinstance(item, dict):
-                continue
-            title = self._clean(item.get("title"))
-            url = self._normalize_url(item.get("url"))
-            snippet = self._clean(item.get("content") or item.get("snippet") or "")
-            if not title or not url:
-                continue
-            domain = self._domain(url)
-            if not domain or self._skip_domain(domain) or url in seen:
-                continue
-            seen.add(url)
-            out.append(SearchResult(len(out)+1, title, url, domain, snippet))
-            if len(out) >= max_results:
-                break
-        return out
-
-    def _parse_html(self, html, max_results):
-        soup = BeautifulSoup(html, "html.parser")
-        nodes = []
-        for selector in ("article.result", "div.result", ".result", "article[data-result]"):
-            nodes.extend(soup.select(selector))
-        out, seen = [], set()
-        for node in nodes:
-            anchor = node.select_one("h3 a[href], h4 a[href], a.result_header[href], a[href]")
-            if not anchor:
-                continue
-            title = self._clean(anchor.get_text(" ", strip=True))
-            url = self._normalize_url(anchor.get("href"))
-            if not title or not url:
-                continue
-            domain = self._domain(url)
-            if not domain or self._skip_domain(domain) or url in seen:
-                continue
-            snippet_node = node.select_one(".content, .result-content, .snippet")
-            snippet = self._clean(snippet_node.get_text(" ", strip=True) if snippet_node else "")
-            seen.add(url)
-            out.append(SearchResult(len(out)+1, title, url, domain, snippet))
-            if len(out) >= max_results:
-                break
-        return out
+    def _validate_config(self) -> None:
+        if not self.base_url:
+            raise SearchError("SEARXNG_URL is not configured.")
+        parsed = urlparse(self.base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise SearchError("SEARXNG_URL must be a valid http(s) URL.")
+        if bool(self.auth_user) != bool(self.auth_password):
+            raise SearchError("SEARXNG_AUTH_USER and SEARXNG_AUTH_PASSWORD must be set together.")
 
     @staticmethod
-    def _response(query, location, country, language, results, source_format):
-        return {"ok": True, "query": query, "location": location, "country": country,
-                "language": language, "backend": "searxng",
-                "source_format": source_format, "result_count": len(results),
-                "results": [r.as_dict() for r in results]}
-
-    @staticmethod
-    def _language(language, country):
+    def _language(language: str, country: str) -> str:
         language, country = language.strip().lower(), country.strip().upper()
         return f"en-{country}" if language == "en" and country else (language or "all")
 
     @staticmethod
-    def _normalize_url(value):
+    def _clean(value: object) -> str:
+        return re.sub(r"\s+", " ", str(value or "")).strip()
+
+    @staticmethod
+    def _normalize_url(value: object) -> str | None:
         if not value:
             return None
         value = str(value).strip()
@@ -151,17 +66,55 @@ class SearXNGClient:
         return parsed._replace(fragment="").geturl()
 
     @staticmethod
-    def _domain(url):
+    def _domain(url: str) -> str:
         return (urlparse(url).hostname or "").lower().removeprefix("www.")
 
     @staticmethod
-    def _skip_domain(domain):
+    def _blocked(domain: str) -> bool:
         domain = domain.lower().removeprefix("www.")
-        blocked = {"google.com", "google.co.in", "gstatic.com",
-                   "bing.com", "duckduckgo.com", "searx.tiekoetter.com"}
-        return (not domain or domain in blocked or domain.endswith(".google.com")
-                or domain.endswith(".google.co.in") or domain.endswith(".gstatic.com"))
+        blocked = {"google.com", "google.co.in", "bing.com", "duckduckgo.com", "gstatic.com"}
+        return not domain or domain in blocked or domain.endswith(".google.com") or domain.endswith(".google.co.in") or domain.endswith(".gstatic.com")
 
-    @staticmethod
-    def _clean(value):
-        return re.sub(r"\s+", " ", str(value or "")).strip()
+    def _parse(self, payload: object, max_results: int) -> list[SearchResult]:
+        if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+            return []
+        results: list[SearchResult] = []
+        seen: set[str] = set()
+        for item in payload["results"]:
+            if not isinstance(item, dict):
+                continue
+            title = self._clean(item.get("title"))
+            url = self._normalize_url(item.get("url"))
+            snippet = self._clean(item.get("content") or item.get("snippet"))
+            if not title or not url or url in seen:
+                continue
+            domain = self._domain(url)
+            if self._blocked(domain):
+                continue
+            seen.add(url)
+            results.append(SearchResult(len(results) + 1, title, url, domain, snippet))
+            if len(results) >= max_results:
+                break
+        return results
+
+    async def search(self, query: str, location: str | None = None, country: str = "in", language: str = "en", max_results: int = 10) -> dict[str, object]:
+        self._validate_config()
+        search_query = " ".join(part.strip() for part in (query, location or "") if part and part.strip())
+        params = {"q": search_query, "format": "json", "language": self._language(language, country), "safesearch": "0", "pageno": "1"}
+        auth = httpx.BasicAuth(self.auth_user, self.auth_password) if self.auth_user else None
+        logger.info("SearXNG search backend=%s query=%r", self.base_url, search_query)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True, auth=auth, headers={"User-Agent": self.user_agent}) as http:
+                response = await http.get(f"{self.base_url}/search", params=params, headers={"Accept": "application/json"})
+        except httpx.HTTPError as exc:
+            raise SearchError(f"SearXNG connection failed: {exc}") from exc
+        if response.status_code != 200:
+            raise SearchError(f"SearXNG returned HTTP {response.status_code}.")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise SearchError("SearXNG returned invalid JSON.") from exc
+        results = self._parse(payload, max_results)
+        if not results:
+            raise SearchError("SearXNG returned no usable search results.")
+        return {"ok": True, "query": query, "location": location, "country": country, "language": language, "backend": "searxng", "result_count": len(results), "results": [result.as_dict() for result in results]}
