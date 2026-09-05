@@ -1,30 +1,10 @@
-# LeadHunter Research Worker
+# LeadHunter Research Worker v0.2.0
 
-Standalone research worker for LeadHunter.
+The SERP backend now uses SearXNG over HTTP instead of direct Google Playwright scraping.
 
-## Version
+## Test
 
-0.1.1
-
-## Current capability
-
-- Google organic SERP scraping
-- Playwright Chromium
-- India/local query support
-- Multiple extraction strategies
-- URL normalization
-- Deduplication
-- Google challenge detection
-- Structured JSON responses
-
-## Endpoints
-
-- `GET /`
-- `GET /health`
-- `POST /serp`
-- `GET /docs`
-
-## Test request
+POST `/serp`:
 
 ```json
 {
@@ -36,6 +16,13 @@ Standalone research worker for LeadHunter.
 }
 ```
 
-## Important
+## Configuration
 
-This worker does not bypass CAPTCHA, rate limits, or security challenges.
+`SEARXNG_URL` controls the backend. The included Render configuration uses
+`https://searx.tiekoetter.com` for initial testing.
+
+Public SearXNG instances can change availability, rate limits, enabled formats,
+and upstream engines. For long-term production, run your own SearXNG instance
+and point `SEARXNG_URL` to it.
+
+This worker does not bypass CAPTCHA, rate limits, or security controls.

@@ -7,3 +7,7 @@ services:
     envVars:
       - key: LOG_LEVEL
         value: INFO
+      - key: SEARXNG_URL
+        value: https://searx.tiekoetter.com
+      - key: SEARXNG_TIMEOUT
+        value: "20"
