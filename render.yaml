@@ -3,11 +3,16 @@ services:
     name: leadhunter-research-worker
     runtime: docker
     plan: free
+    region: singapore
     healthCheckPath: /health
     envVars:
       - key: LOG_LEVEL
         value: INFO
       - key: SEARXNG_URL
-        value: https://searx.tiekoetter.com
+        sync: false
+      - key: SEARXNG_AUTH_USER
+        sync: false
+      - key: SEARXNG_AUTH_PASSWORD
+        sync: false
       - key: SEARXNG_TIMEOUT
-        value: "20"
+        value: "25"
