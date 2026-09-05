@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: leadhunter-research-worker
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: LOG_LEVEL
+        value: "INFO"
