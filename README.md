@@ -1,25 +1,50 @@
-# LeadHunter Research Worker v0.2.1
+# LeadHunter Research Worker v0.4.0
 
-This version intentionally keeps the complete search implementation inside
-`main.py`. This prevents Render deployment problems caused by a missing
-Python package directory.
+Dedicated FastAPI SERP research service backed by LeadHunter SearXNG.
 
-The worker uses SearXNG over HTTP instead of direct Google Playwright
-scraping because the Render IP was challenged by Google.
+## Architecture
 
-## Test
-
-POST `/serp`:
-
-```json
-{
-  "query": "dentist",
-  "location": "Indore",
-  "country": "in",
-  "language": "en",
-  "max_results": 10
-}
+```text
+LeadHunter / Dashboard / Bot
+          |
+          v
+Research Worker (public API)
+          |
+          | authenticated HTTPS on free Render
+          v
+LeadHunter SearXNG
+          |
+          v
+Search engines
 ```
 
-Set `SEARXNG_URL` to a private/self-hosted SearXNG instance for production.
-The included public instance is only for initial testing.
+The worker does not scrape Google directly.
+
+## API
+
+`GET /health`
+
+`POST /serp`
+
+```json
+{"query":"dentist","location":"Indore","country":"in","language":"en","max_results":10}
+```
+
+## Render setup
+
+Deploy `LeadHunter_SearXNG` first. Copy its Render URL and generated `SEARX_AUTH_PASSWORD`, then set these variables here:
+
+- `SEARXNG_URL=https://YOUR-SEARXNG.onrender.com`
+- `SEARXNG_AUTH_USER=leadhunter`
+- `SEARXNG_AUTH_PASSWORD=<generated password>`
+
+Keep both services in the same Render region. If you later use a paid Render plan with a private SearXNG service, replace the public URL with its internal address.
+
+## Verification
+
+```bash
+curl https://YOUR-WORKER.onrender.com/health
+curl -X POST https://YOUR-WORKER.onrender.com/serp -H 'content-type: application/json' -d '{"query":"dentist","location":"Indore","max_results":5}'
+```
+
+Do not connect the production LeadHunter app until `/serp` returns real search results.
