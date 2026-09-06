@@ -1,5 +1,0 @@
-[
-  "tests/test_searxng.py::test_domain_blocking",
-  "tests/test_searxng.py::test_parse_results",
-  "tests/test_searxng.py::test_url_normalization"
-]
