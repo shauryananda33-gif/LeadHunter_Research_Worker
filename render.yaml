@@ -8,6 +8,8 @@ services:
     envVars:
       - key: LOG_LEVEL
         value: INFO
+      - key: WORKER_API_KEY
+        generateValue: true
       - key: SEARXNG_URL
         sync: false
       - key: SEARXNG_AUTH_USER
