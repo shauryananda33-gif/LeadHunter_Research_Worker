@@ -33,9 +33,9 @@ class SearXNGClient:
         self.timeout = float(os.getenv("SEARXNG_TIMEOUT", "25"))
         self.auth_user = os.getenv("SEARXNG_AUTH_USER", "").strip()
         self.auth_password = os.getenv("SEARXNG_AUTH_PASSWORD", "")
-        self.user_agent = "LeadHunterResearchWorker/0.4.0"
+        self.user_agent = "LeadHunterResearchWorker/0.5.0"
 
-    def _validate_config(self) -> None:
+    def validate_config(self) -> None:
         if not self.base_url:
             raise SearchError("SEARXNG_URL is not configured.")
         parsed = urlparse(self.base_url)
@@ -98,7 +98,7 @@ class SearXNGClient:
         return results
 
     async def search(self, query: str, location: str | None = None, country: str = "in", language: str = "en", max_results: int = 10) -> dict[str, object]:
-        self._validate_config()
+        self.validate_config()
         search_query = " ".join(part.strip() for part in (query, location or "") if part and part.strip())
         params = {"q": search_query, "format": "json", "language": self._language(language, country), "safesearch": "0", "pageno": "1"}
         auth = httpx.BasicAuth(self.auth_user, self.auth_password) if self.auth_user else None

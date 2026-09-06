@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: leadhunter-research-worker
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: WORKER_API_KEY
+        generateValue: true
+      - key: SEARXNG_URL
+        sync: false
+      - key: SEARXNG_AUTH_USER
+        sync: false
+      - key: SEARXNG_AUTH_PASSWORD
+        sync: false
+      - key: SEARXNG_TIMEOUT
+        value: "25"
